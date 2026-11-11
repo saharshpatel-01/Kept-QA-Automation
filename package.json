@@ -1,0 +1,83 @@
+{
+    "name": "kept-qa-automation",
+    "version": "1.0.0",
+    "description": "Cross-platform desktop automation for Kept using Appium Mac2/Windows drivers",
+    "main": "index.js",
+    "scripts": {
+        "test": "node scripts/appium-runner.mjs",
+        "test:mac": "node scripts/appium-runner.mjs --suite macos",
+        "test:windows": "node scripts/appium-runner.mjs --suite windows",
+        "test:smoke": "node scripts/appium-runner.mjs --suite smoke",
+        "test:e2e": "node scripts/appium-runner.mjs --suite e2e",
+        "qa:agent": "node scripts/appium-runner.mjs --suite agent",
+        "e2e:assistant": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/ai-assistant.e2e.spec.ts",
+        "e2e:meetings": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/meetings.e2e.spec.ts",
+        "e2e:speech": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/speech-to-text.e2e.spec.ts",
+        "e2e:vocabulary": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/vocabulary.e2e.spec.ts",
+        "e2e:tasks": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/tasks.e2e.spec.ts",
+        "e2e:insights": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/insights.e2e.spec.ts",
+        "e2e:feedback": "node scripts/appium-runner.mjs --spec ./test/specs/e2e/feedback.e2e.spec.ts",
+        "test:ci": "cross-env TEST_ENV=ci node scripts/appium-runner.mjs --suite smoke",
+        "test:wdio": "wdio run ./wdio.conf.ts",
+        "appium": "appium --base-path / --relaxed-security",
+        "report": "allure generate allure-results --clean && allure open",
+        "report:generate": "allure generate allure-results --clean",
+        "lint": "eslint . --ext .ts",
+        "lint:fix": "eslint . --ext .ts --fix",
+        "format": "prettier --write \"**/*.{ts,json,md}\"",
+        "format:check": "prettier --check \"**/*.{ts,json,md}\"",
+        "type-check": "tsc --noEmit",
+        "validate": "npm run type-check && npm run lint && npm run format:check",
+        "prepare": "husky"
+    },
+    "engines": {
+        "node": ">=20.19.0"
+    },
+    "lint-staged": {
+        "*.ts": [
+            "eslint --fix",
+            "prettier --write"
+        ],
+        "*.{json,md}": [
+            "prettier --write"
+        ]
+    },
+    "keywords": [
+        "appium",
+        "mac2",
+        "windows",
+        "desktop-automation",
+        "webdriverio",
+        "typescript"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@types/mocha": "^10.0.10",
+        "@types/node": "^20.10.0",
+        "@typescript-eslint/eslint-plugin": "^8.72.1",
+        "@typescript-eslint/parser": "^8.72.1",
+        "@wdio/allure-reporter": "^8.27.0",
+        "@wdio/appium-service": "^8.46.0",
+        "@wdio/cli": "^8.27.0",
+        "@wdio/globals": "^9.31.3",
+        "@wdio/local-runner": "^8.27.0",
+        "@wdio/mocha-framework": "^8.27.0",
+        "@wdio/spec-reporter": "^8.27.0",
+        "allure-commandline": "^2.25.0",
+        "cross-env": "^10.1.0",
+        "eslint": "^8.57.1",
+        "eslint-config-prettier": "^9.0.0",
+        "husky": "^9.1.7",
+        "lint-staged": "^17.6.0",
+        "prettier": "^3.1.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "axios": "^1.6.2",
+        "dotenv": "^16.3.1",
+        "openai": "^4.20.1",
+        "winston": "^3.11.0"
+    }
+}

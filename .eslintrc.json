@@ -1,0 +1,29 @@
+{
+    "parser": "@typescript-eslint/parser",
+    "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
+    "parserOptions": {
+        "ecmaVersion": 2022,
+        "sourceType": "module",
+        "project": "./tsconfig.json"
+    },
+    "plugins": ["@typescript-eslint"],
+    "rules": {
+        "@typescript-eslint/no-explicit-any": "warn",
+        "@typescript-eslint/explicit-module-boundary-types": "off",
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-misused-promises": "error",
+        "no-console": "off"
+    },
+    "env": {
+        "node": true,
+        "mocha": true
+    },
+    "ignorePatterns": [
+        "dist/",
+        "node_modules/",
+        "allure-results/",
+        "allure-report/",
+        "scripts/**/*.mjs",
+        "*.config.js"
+    ]
+}

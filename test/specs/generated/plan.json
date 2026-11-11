@@ -1,0 +1,19 @@
+{
+  "requirementKey": "XTHIN-55",
+  "requirementSummary": "[macOS] Meetings sidebar item needs two clicks to switch from another page",
+  "cases": [
+    {
+      "title": "Smoke: AI Assistant is reachable for XTHIN-55",
+      "steps": [
+        {
+          "action": "navigate",
+          "screen": "AI Assistant"
+        },
+        {
+          "action": "expectButton",
+          "label": "Send"
+        }
+      ]
+    }
+  ]
+}
