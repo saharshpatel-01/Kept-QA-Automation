@@ -242,7 +242,3 @@ Windows host with Appium, the windows driver, and `Kept.exe` to run.
 - **Reporting**: Allure
 - **AI**: OpenAI GPT-4 (optional)
 - **Issue Tracking**: Jira API (optional)
-
----
-
-**Built with ❤️ for reliable desktop automation**
