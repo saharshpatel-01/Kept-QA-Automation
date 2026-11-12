@@ -15,6 +15,17 @@ function adfToPlainText(node: unknown): string {
     return n.type === 'paragraph' || n.type === 'listItem' ? inner + '\n' : inner;
 }
 
+export interface FormattedBug {
+    title: string;
+    description: string;
+    steps: string[];
+    actual: string;
+    expected: string;
+    environment: string;
+    priority?: string;
+    labels?: string[];
+}
+
 export interface JiraIssue {
     key: string;
     fields: {
@@ -190,6 +201,107 @@ export class JiraClient {
         } catch (error) {
             logger.error('Failed to create Jira issue:', error);
             return null;
+        }
+    }
+
+    /**
+     * Create a bug in Hardeep's Jira board format:
+     * Bug Title, Description, Steps to Reproduce (numbered), Actual Result, Expected Result.
+     * Skips creation and returns the existing issue when an open duplicate has the same title.
+     */
+    async createFormattedBug(
+        bug: FormattedBug
+    ): Promise<{ key: string; id: number; duplicate: boolean } | null> {
+        if (!this.baseUrl) {
+            logger.warn('Jira not configured. Bug not created.');
+            return null;
+        }
+        try {
+            // JQL text search rejects [ ] > " etc. - search on words only.
+            const words = bug.title
+                .replace(/[^\w\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            const duplicates = await this.searchDuplicates(words);
+            if (duplicates.length > 0) {
+                const key = duplicates[0].key;
+                logger.info(
+                    `Open bug with the same title already exists: ${key} (not filing again)`
+                );
+                return { key, id: await this.getIssueId(key), duplicate: true };
+            }
+            const para = (text: string) => ({
+                type: 'paragraph',
+                content: text ? [{ type: 'text', text }] : []
+            });
+            const heading = (text: string) => ({
+                type: 'heading',
+                attrs: { level: 3 },
+                content: [{ type: 'text', text }]
+            });
+            const steps = bug.steps.length ? bug.steps : ['(steps were not recorded by this test)'];
+            const description = {
+                type: 'doc',
+                version: 1,
+                content: [
+                    heading('Description'),
+                    para(bug.description),
+                    heading('Steps to Reproduce'),
+                    {
+                        type: 'orderedList',
+                        content: steps.map(s => ({ type: 'listItem', content: [para(s)] }))
+                    },
+                    heading('Actual Result'),
+                    para(bug.actual),
+                    heading('Expected Result'),
+                    para(bug.expected),
+                    heading('Environment'),
+                    para(bug.environment)
+                ]
+            };
+            const res = await this.client.post('/issue', {
+                fields: {
+                    project: { key: this.projectKey },
+                    summary: bug.title,
+                    description,
+                    issuetype: { name: 'Bug' },
+                    ...(bug.priority ? { priority: { name: bug.priority } } : {}),
+                    labels: [...(bug.labels || []), 'automation-detected']
+                }
+            });
+            logger.info(`Created Jira bug ${res.data.key}: ${bug.title}`);
+            return { key: res.data.key, id: Number(res.data.id), duplicate: false };
+        } catch (error) {
+            logger.error('Failed to create Jira bug:', error);
+            return null;
+        }
+    }
+
+    /** Numeric Jira id for an issue key (Zephyr links need the id, not the key). */
+    async getIssueId(key: string): Promise<number> {
+        const res = await this.client.get(`/issue/${key}`, { params: { fields: 'summary' } });
+        return Number(res.data.id);
+    }
+
+    /** Attach a PNG screenshot (base64) to an issue. */
+    async attachScreenshot(
+        key: string,
+        base64Png: string,
+        filename = 'failure.png'
+    ): Promise<void> {
+        if (!this.baseUrl) return;
+        try {
+            const form = new FormData();
+            form.append(
+                'file',
+                new Blob([Buffer.from(base64Png, 'base64')], { type: 'image/png' }),
+                filename
+            );
+            await this.client.post(`/issue/${key}/attachments`, form, {
+                headers: { 'X-Atlassian-Token': 'no-check', 'Content-Type': 'multipart/form-data' }
+            });
+        } catch (error) {
+            logger.warn(`Could not attach screenshot to ${key}: ${error}`);
         }
     }
 

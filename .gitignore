@@ -64,3 +64,8 @@ screenshots/*.png
 *.tmp
 *.temp
 .cache/
+
+# Never commit secrets (this repo is public)
+.env
+google_key.json
+*service-account*.json

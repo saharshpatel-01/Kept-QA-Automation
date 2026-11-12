@@ -2,6 +2,8 @@
 
 import { AIAnalyzer } from '../ai/analyzer';
 import { JiraClient } from '../jira/client';
+import { caseIdFromTitle } from './case-id';
+import { getSteps } from './steps';
 import { logger } from './logger';
 
 export interface FailedTestContext {
@@ -10,13 +12,17 @@ export interface FailedTestContext {
 }
 
 /**
- * Orchestrates post-failure handling for a single test:
- * screenshot -> AI root-cause analysis -> AI bug draft -> Jira ticket.
+ * After a test fails: screenshot -> (optional) AI analysis -> Jira bug in
+ * Hardeep's format (Title, Description, Steps to Reproduce, Actual, Expected)
+ * with the screenshot attached. Returns the Jira issue, or null when no bug was filed.
  *
- * Every step degrades gracefully: without OPENAI_API_KEY the analysis is
- * skipped, and without Jira credentials no ticket is filed.
+ * AUTO_FILE_BUGS=false -> analysis only, no Jira bug.
+ * No Jira credentials  -> nothing filed, run continues.
  */
-export async function reportFailure({ testName, error }: FailedTestContext): Promise<void> {
+export async function reportFailure({
+    testName,
+    error
+}: FailedTestContext): Promise<{ key: string; id: number } | null> {
     const autoFileEnabled = process.env.AUTO_FILE_BUGS !== 'false';
 
     let screenshot: string | undefined;
@@ -26,39 +32,50 @@ export async function reportFailure({ testName, error }: FailedTestContext): Pro
         logger.warn(`Could not capture screenshot for "${testName}": ${e}`);
     }
 
-    const errorMessage = error?.message || String(error);
-    const stackTrace = error?.stack || '';
-    const environment = `platform=${process.env.TEST_PLATFORM || 'mac'}, node=${process.version}`;
+    const errorMessage = (error?.message || String(error)).split('\n')[0];
+    const platform = process.env.TEST_PLATFORM || 'mac';
+    const build = process.env.KEPT_BUILD || 'build not set (add KEPT_BUILD to .env)';
+    const environment = `Kept Dev ${build} | ${platform} | automated run ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+    const caseId = caseIdFromTitle(testName);
+    const cleanName = testName.replace(/\[[^\]]+\]\s*/, '').trim();
 
-    const analyzer = new AIAnalyzer();
-    const analysis = await analyzer.analyzeFailure({
-        testName,
-        errorMessage,
-        stackTrace,
-        screenshot,
-        expectedBehavior: `Test "${testName}" should pass`,
-        actualBehavior: errorMessage
-    });
-
-    logger.info(`AI failure analysis for "${testName}":\n${analysis}`);
+    // Optional AI root-cause text for the Description (only when OPENAI_API_KEY is set).
+    let aiText = '';
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            aiText = await new AIAnalyzer().analyzeFailure({
+                testName,
+                errorMessage,
+                stackTrace: error?.stack || '',
+                screenshot,
+                expectedBehavior: `Test "${testName}" should pass`,
+                actualBehavior: errorMessage
+            });
+        } catch (e) {
+            logger.warn(`AI analysis failed: ${e}`);
+        }
+    }
 
     if (!autoFileEnabled) {
-        logger.info('AUTO_FILE_BUGS=false — skipping Jira ticket creation.');
-        return;
+        logger.info(`AUTO_FILE_BUGS=false — not filing a Jira bug for "${testName}".`);
+        return null;
     }
-
-    const bug = await analyzer.generateBugReport(analysis, {
-        testName,
-        errorMessage,
-        environment
-    });
 
     const jira = new JiraClient();
-    const issueKey = await jira.createBug({ ...bug, environment });
+    const issue = await jira.createFormattedBug({
+        title: `[Kept ${platform === 'windows' ? 'Windows' : 'Mac'}] ${cleanName}`,
+        description:
+            `Automated test ${caseId ? caseId + ' ' : ''}failed on Kept Dev (${platform}).` +
+            (aiText ? `\n\nAI analysis: ${aiText.slice(0, 1500)}` : ''),
+        steps: getSteps(),
+        actual: errorMessage,
+        expected: cleanName,
+        environment,
+        labels: ['kept', platform, ...(caseId ? [caseId] : [])]
+    });
 
-    if (issueKey) {
-        logger.info(`Filed/linked Jira issue ${issueKey} for failed test "${testName}"`);
-    } else {
-        logger.info(`No Jira issue created for "${testName}" (Jira not configured).`);
+    if (issue && !issue.duplicate && screenshot) {
+        await jira.attachScreenshot(issue.key, screenshot, `${caseId || 'failure'}.png`);
     }
+    return issue;
 }

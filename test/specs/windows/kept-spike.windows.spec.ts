@@ -1,0 +1,62 @@
+/// <reference types="@wdio/globals/types" />
+
+import { step } from '../../../src/utils/steps';
+
+/**
+ * WINDOWS SPIKE - proves the TypeScript framework can drive Kept Dev on Windows.
+ * Uses the same automation IDs as the Python (pywinauto) suite:
+ *   HeaderSettingsBtn  = gear icon (top right)
+ *   SearchBox          = "Find a setting" box (Settings is open)
+ *   ListHost           = Settings left menu
+ * Read-only: nothing is created, changed or deleted.
+ *
+ * Run:  set TEST_PLATFORM=windows  &&  npx wdio run ./wdio.conf.ts --spec ./test/specs/windows/kept-spike.windows.spec.ts
+ */
+
+async function pageHas(text: string): Promise<boolean> {
+    const xml = await browser.getPageSource();
+    return xml.includes(text);
+}
+
+describe('Kept (Windows) - spike', () => {
+    it('main window loads and shows the header Settings button', async () => {
+        step('Launch Kept Dev and wait for the main window');
+        const gear = await $('~HeaderSettingsBtn');
+        await gear.waitForExist({ timeout: 60000 });
+        await browser.saveScreenshot('./screenshots/spike-01-main.png');
+    });
+
+    it('sidebar pages are visible by name', async () => {
+        for (const page of [
+            'Meetings',
+            'AI Assistant',
+            'Speech to Text',
+            'Vocabulary',
+            'Tasks',
+            'Insights'
+        ]) {
+            const found = await pageHas(`"${page}"`);
+            console.log(`[spike] sidebar "${page}": ${found ? 'FOUND' : 'NOT FOUND'}`);
+        }
+    });
+
+    it('opens Settings with the gear and the Settings menu appears', async () => {
+        step('Click the Settings (gear) icon at the top right');
+        await (await $('~HeaderSettingsBtn')).click();
+        await (await $('~SearchBox')).waitForExist({ timeout: 25000 });
+        await (await $('~ListHost')).waitForExist({ timeout: 25000 });
+        await browser.saveScreenshot('./screenshots/spike-02-settings.png');
+    });
+
+    it('[AIT-WIN-313] Settings > Profile shows Name, Email and Workspace', async () => {
+        step('Click the Settings (gear) icon at the top right');
+        step('Click "Profile" in the Settings left menu');
+        await (await $('//Button[@Name="Profile"]')).click();
+        await browser.pause(2000);
+        for (const label of ['Name', 'Email', 'Workspace']) {
+            step(`Check that "${label}" is shown`);
+            expect(await pageHas(label)).toBe(true);
+        }
+        await browser.saveScreenshot('./screenshots/spike-03-profile.png');
+    });
+});

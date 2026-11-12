@@ -6,6 +6,9 @@ import { preflightMac } from './src/utils/preflight';
 import { getEnvironment } from './config/environments';
 import { getCapabilities } from './config/capabilities';
 import { RequirementAgent } from './src/ai/requirement-agent';
+import { ZephyrClient } from './src/zephyr/client';
+import { zephyrKeyFromTitle } from './src/utils/case-id';
+import { resetSteps } from './src/utils/steps';
 
 dotenvConfig();
 
@@ -121,6 +124,18 @@ export const config: Options.Testrunner = {
      * Hooks
      */
     onPrepare: async function () {
+        // Zephyr Scale: one test cycle per run; workers read its key from the env.
+        const zephyr = new ZephyrClient();
+        if (zephyr.enabled && !process.env.ZEPHYR_CYCLE_KEY) {
+            const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+            const name = `Automation ${platform} - Kept Dev ${process.env.KEPT_BUILD || ''} - ${stamp}`;
+            const key = await zephyr.createCycle(
+                name,
+                'Created automatically by Kept-QA-Automation'
+            );
+            if (key) process.env.ZEPHYR_CYCLE_KEY = key;
+        }
+
         // Agentic mode: when a Jira requirement key is provided, generate the
         // test plan from that ticket before the workers start.
         const requirementKey = process.env.JIRA_REQUIREMENT_KEY;
@@ -139,25 +154,41 @@ export const config: Options.Testrunner = {
     },
 
     beforeTest: async function () {
-        // Setup before each test
+        resetSteps();
     },
 
-    afterTest: async function (test, _context, { error }) {
-        if (error) {
+    afterTest: async function (test, _context, { error, duration }) {
+        const testName = (test as { fullTitle?: string; title: string }).fullTitle || test.title;
+        let issue: { key: string; id: number } | null = null;
+
+        if (error && !process.env.JIRA_REQUIREMENT_KEY) {
             // In agentic mode the executor spec files requirement-linked bugs
-            // itself, so skip the generic reporter to avoid double-filing.
-            if (process.env.JIRA_REQUIREMENT_KEY) {
-                return;
-            }
-            const testName =
-                (test as { fullTitle?: string; title: string }).fullTitle || test.title;
+            // itself, so the generic reporter is skipped to avoid double-filing.
             try {
-                await reportFailure({ testName, error: error as Error });
+                issue = await reportFailure({ testName, error: error as Error });
             } catch (e) {
                 // Never let failure reporting mask the original test failure
                 // eslint-disable-next-line no-console
                 console.error(`Failure reporting errored for "${testName}":`, e);
             }
+        }
+
+        // Zephyr Scale: record Pass/Fail for tests whose title carries a case ID.
+        const cycleKey = process.env.ZEPHYR_CYCLE_KEY;
+        const caseKey = zephyrKeyFromTitle(testName);
+        if (cycleKey && caseKey) {
+            const zephyr = new ZephyrClient();
+            const execId = await zephyr.createExecution({
+                testCaseKey: caseKey,
+                testCycleKey: cycleKey,
+                status: error ? 'Fail' : 'Pass',
+                comment: error
+                    ? `Automated: ${(error as Error).message?.split('\n')[0] ?? ''}${issue ? ` | Bug ${issue.key}` : ''}`
+                    : `Automated run, Kept Dev ${process.env.KEPT_BUILD || ''}`,
+                environmentName: process.env.ZEPHYR_ENVIRONMENT || undefined,
+                executionTimeMs: duration
+            });
+            if (execId && issue) await zephyr.linkIssue(execId, issue.id);
         }
     },
 
