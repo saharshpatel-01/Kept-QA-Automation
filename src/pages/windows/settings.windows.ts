@@ -10,6 +10,35 @@ import { step } from '../../utils/steps';
 let appLoaded = false;
 
 /**
+ * Kept has two top-level windows: the main window and a small floating bubble
+ * (~199x34). The driver may attach to the bubble, so switch to the BIGGEST window,
+ * exactly like app_launcher.py does ("biggest = main window (bubble is small)").
+ */
+export async function focusMainWindow(): Promise<void> {
+    const handles = await browser.getWindowHandles();
+    let best: string | undefined;
+    let bestArea = -1;
+    for (const h of handles) {
+        try {
+            await browser.switchToWindow(h);
+            const r = await browser.getWindowRect();
+            const area = r.width * r.height;
+            console.log(`[window] ${h}: ${r.width}x${r.height}`);
+            if (area > bestArea) {
+                bestArea = area;
+                best = h;
+            }
+        } catch (e) {
+            console.log(`[window] ${h}: could not read size (${(e as Error).message})`);
+        }
+    }
+    if (best) {
+        await browser.switchToWindow(best);
+        console.log(`[window] using main window ${best} (${handles.length} window(s) found)`);
+    }
+}
+
+/**
  * Wait until Kept's window content is really loaded. Like app_launcher.py: after the
  * window appears, the web content inside needs a few seconds; we also wait until the
  * sidebar ("Meetings") is readable before the first click.
@@ -19,6 +48,7 @@ export async function settleWindow(): Promise<void> {
     await gear.waitForExist({ timeout: 60000 });
     if (!appLoaded) {
         await browser.pause(5000);
+        await focusMainWindow();
         await browser.waitUntil(async () => (await browser.getPageSource()).includes('Meetings'), {
             timeout: 30000,
             interval: 1500,

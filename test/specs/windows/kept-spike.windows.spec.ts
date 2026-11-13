@@ -1,7 +1,11 @@
 /// <reference types="@wdio/globals/types" />
 
 import { step } from '../../../src/utils/steps';
-import { openSettings, openSettingsTab } from '../../../src/pages/windows/settings.windows';
+import {
+    openSettings,
+    openSettingsTab,
+    settleWindow
+} from '../../../src/pages/windows/settings.windows';
 
 /**
  * WINDOWS SPIKE - proves the TypeScript framework can drive Kept Dev on Windows.
@@ -14,16 +18,17 @@ import { openSettings, openSettingsTab } from '../../../src/pages/windows/settin
  * Run:  set TEST_PLATFORM=windows  &&  npx wdio run ./wdio.conf.ts --spec ./test/specs/windows/kept-spike.windows.spec.ts
  */
 
+/** True when an element whose Name is exactly `text` (or starts with it) is on screen. */
 async function pageHas(text: string): Promise<boolean> {
     const xml = await browser.getPageSource();
-    return xml.includes(text);
+    const esc = text.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return xml.includes(`Name="${esc}"`) || xml.includes(`Name="${esc} `);
 }
 
 describe('Kept (Windows) - spike', () => {
     it('main window loads and shows the header Settings button', async () => {
         step('Launch Kept Dev and wait for the main window');
-        const gear = await $('~HeaderSettingsBtn');
-        await gear.waitForExist({ timeout: 60000 });
+        await settleWindow();
         await browser.saveScreenshot('./screenshots/spike-01-main.png');
     });
 
@@ -36,7 +41,7 @@ describe('Kept (Windows) - spike', () => {
             'Tasks',
             'Insights'
         ]) {
-            const found = await pageHas(`"${page}"`);
+            const found = await pageHas(page);
             console.log(`[spike] sidebar "${page}": ${found ? 'FOUND' : 'NOT FOUND'}`);
         }
     });
