@@ -10,32 +10,43 @@ import { step } from '../../utils/steps';
 let appLoaded = false;
 
 /**
- * Kept has two top-level windows: the main window and a small floating bubble
- * (~199x34). The driver may attach to the bubble, so switch to the BIGGEST window,
- * exactly like app_launcher.py does ("biggest = main window (bubble is small)").
+ * Kept has several top-level windows: the main window, a small floating bubble (~199x34)
+ * and hidden helper windows that report an invalid size (e.g. -2147483647). The driver may
+ * attach to any of them, so - like app_launcher.py - pick the BIGGEST VISIBLE window whose
+ * title contains "Kept" (MAIN_WINDOW_HINT). Invalid, off-screen or tiny windows are skipped.
  */
 export async function focusMainWindow(): Promise<void> {
+    const hint = (process.env.MAIN_WINDOW_HINT || 'Kept').toLowerCase();
     const handles = await browser.getWindowHandles();
+    const start = handles.length ? await browser.getWindowHandle().catch(() => handles[0]) : '';
     let best: string | undefined;
-    let bestArea = -1;
+    let bestArea = 0;
     for (const h of handles) {
         try {
             await browser.switchToWindow(h);
             const r = await browser.getWindowRect();
-            const area = r.width * r.height;
-            console.log(`[window] ${h}: ${r.width}x${r.height}`);
-            if (area > bestArea) {
-                bestArea = area;
+            const title = (await browser.getTitle().catch(() => '')) || '';
+            const valid =
+                r.width >= 400 && r.height >= 300 && r.width <= 20000 && r.height <= 20000;
+            const titleOk = !hint || title.toLowerCase().includes(hint);
+            console.log(
+                `[window] ${h}: ${r.width}x${r.height} "${title}"${valid && titleOk ? '' : ' (skipped)'}`
+            );
+            if (valid && titleOk && r.width * r.height > bestArea) {
+                bestArea = r.width * r.height;
                 best = h;
             }
         } catch (e) {
-            console.log(`[window] ${h}: could not read size (${(e as Error).message})`);
+            console.log(`[window] ${h}: skipped (${(e as Error).message.split('\n')[0]})`);
         }
     }
-    if (best) {
-        await browser.switchToWindow(best);
-        console.log(`[window] using main window ${best} (${handles.length} window(s) found)`);
-    }
+    const target = best ?? start;
+    if (target) await browser.switchToWindow(target);
+    console.log(
+        best
+            ? `[window] using main window ${best} (${handles.length} window(s) found)`
+            : `[window] no valid Kept window found - staying on ${start}`
+    );
 }
 
 /**
