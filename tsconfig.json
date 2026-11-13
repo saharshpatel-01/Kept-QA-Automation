@@ -17,6 +17,6 @@
         "moduleResolution": "node10",
         "types": ["node", "@wdio/globals/types", "mocha"]
     },
-    "include": ["src/**/*", "test/**/*", "config/**/*", "wdio.conf.ts"],
+    "include": ["src/**/*", "test/**/*", "config/**/*", "scripts/**/*.ts", "wdio.conf.ts"],
     "exclude": ["node_modules", "dist", "allure-results", "allure-report"]
 }

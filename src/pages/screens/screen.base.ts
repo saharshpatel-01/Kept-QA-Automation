@@ -1,6 +1,7 @@
 /// <reference types="@wdio/globals/types" />
 
 import { BasePage } from '../base.page';
+import { step } from '../../utils/steps';
 import { navigateTo, getSidebarHelpLabels, Screen, ScreenName } from '../../utils/native-nav';
 
 /**
@@ -15,6 +16,7 @@ export abstract class ScreenPage extends BasePage {
 
     /** Navigate to this screen and wait for it to settle. */
     async open(): Promise<void> {
+        step(`Open Kept Dev and click "${this.screen}" in the left sidebar`);
         navigateTo(this.screen);
         await browser.pause(1800);
     }

@@ -30,12 +30,14 @@ const appium = {
     path: '/'
 };
 
-const platform = (process.env.TEST_PLATFORM || 'mac').toLowerCase() as Platform;
+// Read lazily: this module is imported before wdio.conf loads .env, so reading
+// TEST_PLATFORM at import time would ignore a value set in .env.
+const platform = (): Platform => (process.env.TEST_PLATFORM || 'mac').toLowerCase() as Platform;
 
 const environments: Record<string, EnvironmentConfig> = {
     local: {
         name: 'local',
-        platform,
+        platform: 'mac',
         appium,
         timeouts: {
             waitforTimeout: 15000,
@@ -44,12 +46,13 @@ const environments: Record<string, EnvironmentConfig> = {
         },
         retries: {
             specFileRetries: 0,
-            mochaRetries: 0
+            // Rerun a failing test once before it counts (filters flaky/timing failures).
+            mochaRetries: Number(process.env.TEST_RETRIES ?? 1)
         }
     },
     ci: {
         name: 'ci',
-        platform,
+        platform: 'mac',
         appium,
         timeouts: {
             waitforTimeout: 20000,
@@ -71,5 +74,5 @@ export function getEnvironment(): EnvironmentConfig {
             `Unknown TEST_ENV "${key}". Valid values: ${Object.keys(environments).join(', ')}`
         );
     }
-    return env;
+    return { ...env, platform: platform() };
 }

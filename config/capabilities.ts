@@ -12,8 +12,10 @@ export function getCapabilities(platform: Platform): any[] {
         return [
             {
                 platformName: 'windows',
-                'appium:automationName': 'Windows',
-                'appium:app': process.env.WINDOWS_APP_PATH || 'C:\\Program Files\\Kept\\Kept.exe'
+                // NovaWindows: maintained UI Automation driver (WinAppDriver is no longer updated).
+                'appium:automationName': 'NovaWindows',
+                'appium:app': process.env.WINDOWS_APP_PATH,
+                'appium:newCommandTimeout': 300
             }
         ];
     }

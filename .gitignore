@@ -64,3 +64,11 @@ screenshots/*.png
 *.tmp
 *.temp
 .cache/
+
+# Never commit secrets (this repo is public)
+.env
+google_key.json
+*service-account*.json
+
+# Bug drafts for review (contain screenshots of the app)
+bug-drafts/
