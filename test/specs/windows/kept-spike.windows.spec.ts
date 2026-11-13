@@ -1,6 +1,7 @@
 /// <reference types="@wdio/globals/types" />
 
 import { step } from '../../../src/utils/steps';
+import { openSettings, openSettingsTab } from '../../../src/pages/windows/settings.windows';
 
 /**
  * WINDOWS SPIKE - proves the TypeScript framework can drive Kept Dev on Windows.
@@ -41,18 +42,12 @@ describe('Kept (Windows) - spike', () => {
     });
 
     it('opens Settings with the gear and the Settings menu appears', async () => {
-        step('Click the Settings (gear) icon at the top right');
-        await (await $('~HeaderSettingsBtn')).click();
-        await (await $('~SearchBox')).waitForExist({ timeout: 25000 });
-        await (await $('~ListHost')).waitForExist({ timeout: 25000 });
+        await openSettings();
         await browser.saveScreenshot('./screenshots/spike-02-settings.png');
     });
 
     it('[AIT-WIN-313] Settings > Profile shows Name, Email and Workspace', async () => {
-        step('Click the Settings (gear) icon at the top right');
-        step('Click "Profile" in the Settings left menu');
-        await (await $('//Button[@Name="Profile"]')).click();
-        await browser.pause(2000);
+        await openSettingsTab('Profile');
         for (const label of ['Name', 'Email', 'Workspace']) {
             step(`Check that "${label}" is shown`);
             expect(await pageHas(label)).toBe(true);

@@ -4,7 +4,7 @@ import { logger } from '../utils/logger';
 /**
  * Zephyr Scale Cloud client (REST API v2).
  * Needs ZEPHYR_API_TOKEN (Jira > Zephyr > API Access Tokens) and ZEPHYR_PROJECT_KEY.
- * Without them every method is a safe no-op, so runs never break.
+ * Writes happen only when ZEPHYR_RECORD=true; otherwise every method is a safe no-op.
  */
 export class ZephyrClient {
     private client: AxiosInstance;
@@ -14,7 +14,8 @@ export class ZephyrClient {
     constructor() {
         const token = process.env.ZEPHYR_API_TOKEN || '';
         this.projectKey = process.env.ZEPHYR_PROJECT_KEY || process.env.JIRA_PROJECT_KEY || '';
-        this.enabled = Boolean(token && this.projectKey);
+        // Recording results is OFF unless ZEPHYR_RECORD=true (setup/checks never write to Zephyr).
+        this.enabled = Boolean(token && this.projectKey) && process.env.ZEPHYR_RECORD === 'true';
         this.client = axios.create({
             baseURL: process.env.ZEPHYR_BASE_URL || 'https://api.zephyrscale.smartbear.com/v2',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

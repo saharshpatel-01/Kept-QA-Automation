@@ -69,3 +69,6 @@ screenshots/*.png
 .env
 google_key.json
 *service-account*.json
+
+# Bug drafts for review (contain screenshots of the app)
+bug-drafts/

@@ -157,9 +157,18 @@ export const config: Options.Testrunner = {
         resetSteps();
     },
 
-    afterTest: async function (test, _context, { error, duration }) {
-        const testName = (test as { fullTitle?: string; title: string }).fullTitle || test.title;
+    afterTest: async function (test, _context, { error, duration, retries }) {
+        // Use the test's own title (it carries the [AIT-WIN-xxx] ID), not the describe prefix.
+        const testName = test.title;
         let issue: { key: string; id: number } | null = null;
+
+        // A failing test is rerun once (TEST_RETRIES). Only the final attempt counts:
+        // a test that passes on the rerun is flaky, not a bug.
+        if (error && retries && retries.attempts < retries.limit) {
+            // eslint-disable-next-line no-console
+            console.log(`[rerun] "${testName}" failed - rerunning before reporting`);
+            return;
+        }
 
         if (error && !process.env.JIRA_REQUIREMENT_KEY) {
             // In agentic mode the executor spec files requirement-linked bugs

@@ -230,33 +230,36 @@ export class JiraClient {
                 );
                 return { key, id: await this.getIssueId(key), duplicate: true };
             }
+            // Layout matches the team's manual bugs: bold labels, not headings.
             const para = (text: string) => ({
                 type: 'paragraph',
                 content: text ? [{ type: 'text', text }] : []
             });
-            const heading = (text: string) => ({
-                type: 'heading',
-                attrs: { level: 3 },
-                content: [{ type: 'text', text }]
+            const label = (name: string, value = '') => ({
+                type: 'paragraph',
+                content: [
+                    { type: 'text', text: name, marks: [{ type: 'strong' }] },
+                    ...(value ? [{ type: 'text', text: ` ${value}` }] : [])
+                ]
             });
             const steps = bug.steps.length ? bug.steps : ['(steps were not recorded by this test)'];
+            const plainTitle = bug.title.replace(/^\[[^\]]+\]\s*/, '');
             const description = {
                 type: 'doc',
                 version: 1,
                 content: [
-                    heading('Description'),
-                    para(bug.description),
-                    heading('Steps to Reproduce'),
+                    label('Bug Title:', plainTitle),
+                    label('Description:'),
+                    para(`${bug.description} ${bug.environment}`.trim()),
+                    label('Steps to Reproduce:'),
                     {
                         type: 'orderedList',
                         content: steps.map(s => ({ type: 'listItem', content: [para(s)] }))
                     },
-                    heading('Actual Result'),
+                    label('Actual Result:'),
                     para(bug.actual),
-                    heading('Expected Result'),
-                    para(bug.expected),
-                    heading('Environment'),
-                    para(bug.environment)
+                    label('Expected Result:'),
+                    para(bug.expected)
                 ]
             };
             const res = await this.client.post('/issue', {

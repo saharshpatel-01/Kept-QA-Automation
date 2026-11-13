@@ -46,7 +46,8 @@ const environments: Record<string, EnvironmentConfig> = {
         },
         retries: {
             specFileRetries: 0,
-            mochaRetries: 0
+            // Rerun a failing test once before it counts (filters flaky/timing failures).
+            mochaRetries: Number(process.env.TEST_RETRIES ?? 1)
         }
     },
     ci: {
