@@ -121,9 +121,141 @@ export async function openSettings(): Promise<void> {
     throw new Error('Settings did not open after clicking the gear icon twice');
 }
 
+/** Python ui.norm(): curly quotes -> straight quotes, trim. */
+function norm(t: string): string {
+    return (t || '').replace(/’/g, "'").replace(/‘/g, "'").trim();
+}
+
+function unXml(s: string): string {
+    return s
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(Number(n)))
+        .replace(/&amp;/g, '&');
+}
+
+let tabCheckLogged = false;
+
+/**
+ * Heading of the Settings page that is shown - like SettingsPage.current_tab() in Python:
+ * the first Text with a Name after the left menu's ScrollBar (which follows "Settings sections").
+ * Fallback (only if "Settings sections" is not in the tree): the first Text with a Name
+ * after the end of the ListHost element. The method used is logged once.
+ */
+export async function currentSettingsTab(): Promise<string> {
+    const xml = await browser.getPageSource();
+    const els: { type: string; name: string }[] = [];
+    const rx = /<(\w+)\b([^>]*)>/g;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(xml)) !== null) {
+        const nm = /\sName="([^"]*)"/.exec(m[2]);
+        els.push({ type: m[1], name: nm ? norm(unXml(nm[1])) : '' });
+    }
+    const start = els.findIndex(e => e.name === 'Settings sections');
+    if (start >= 0) {
+        let pastMenu = false;
+        for (const e of els.slice(start + 1)) {
+            if (!pastMenu) {
+                if (e.type === 'ScrollBar') pastMenu = true;
+                continue;
+            }
+            if (e.type === 'Text' && e.name) {
+                if (!tabCheckLogged) console.log('[tab] heading read like Python current_tab()');
+                tabCheckLogged = true;
+                return e.name;
+            }
+        }
+        return '';
+    }
+    // Fallback: the first Text with a Name AFTER the end of the ListHost element.
+    // Walk the tags and count nesting depth to find where ListHost closes.
+    const tag = /<(\/?)(\w+)\b([^>]*?)(\/?)>/g;
+    let depth = 0;
+    let inList = false;
+    let listEnded = false;
+    while ((m = tag.exec(xml)) !== null) {
+        const closing = m[1] === '/';
+        const selfClosing = m[4] === '/';
+        if (!inList && !listEnded) {
+            if (!closing && m[3].includes('AutomationId="ListHost"')) {
+                if (selfClosing) listEnded = true;
+                else {
+                    inList = true;
+                    depth = 1;
+                }
+            }
+            continue;
+        }
+        if (inList) {
+            if (closing) depth--;
+            else if (!selfClosing) depth++;
+            if (depth === 0) {
+                inList = false;
+                listEnded = true;
+            }
+            continue;
+        }
+        if (!closing && m[2] === 'Text') {
+            const nm = /\sName="([^"]*)"/.exec(m[3]);
+            const name = nm ? norm(unXml(nm[1])) : '';
+            if (name) {
+                if (!tabCheckLogged)
+                    console.log('[tab] heading read with FALLBACK (Text after ListHost)');
+                tabCheckLogged = true;
+                return name;
+            }
+        }
+    }
+    return '';
+}
+
+async function scrollMenu(down: boolean): Promise<void> {
+    try {
+        const list = await $('~ListHost');
+        await browser.execute('windows: scroll', {
+            elementId: await list.elementId,
+            deltaY: down ? 600 : -600
+        });
+        await browser.pause(600);
+    } catch (e) {
+        console.log(`[tab] menu scroll failed, continuing: ${(e as Error).message.split('\n')[0]}`);
+    }
+}
+
+/**
+ * Open a Settings tab like SettingsPage.open_tab() in Python: find the Button inside the
+ * ListHost menu, scroll it into view, click it, and verify (up to 8 s) that the page heading
+ * equals the tab name. Up to 4 attempts.
+ */
 export async function openSettingsTab(tab: string): Promise<void> {
     await openSettings();
+    const want = norm(tab);
+    if ((await currentSettingsTab()) === want) return;
     step(`Click "${tab}" in the Settings left menu`);
-    await invokeClick(`//Button[@Name="${tab}"]`);
-    await browser.pause(2000);
+    const selector = `//*[@AutomationId="ListHost"]//Button[@Name="${tab}"]`;
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const btn = await $(selector);
+        await btn.waitForExist({ timeout: 12000 });
+        try {
+            await browser.execute('windows: scrollIntoView', btn);
+        } catch (e) {
+            console.log(`[tab] scrollIntoView failed: ${(e as Error).message.split('\n')[0]}`);
+        }
+        if (attempt >= 1) await scrollMenu(attempt % 2 === 1);
+        await invokeClick(selector);
+        const end = Date.now() + 8000;
+        while (Date.now() < end) {
+            if ((await currentSettingsTab()) === want) {
+                await browser.pause(500);
+                return;
+            }
+            await browser.pause(600);
+        }
+        console.log(`[tab] attempt ${attempt + 1}: "${tab}" not open yet`);
+    }
+    throw new Error(
+        `Settings tab ${tab} did not open (page shows ${(await currentSettingsTab()) || 'nothing'})`
+    );
 }
