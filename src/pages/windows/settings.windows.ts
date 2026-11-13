@@ -10,19 +10,6 @@ import { step } from '../../utils/steps';
 let appLoaded = false;
 
 /**
- * Bring Kept to the front and maximise it (like ui.front() + app_launcher.py), so no other
- * window (e.g. the agent's terminal) sits over the gear when a real mouse click is sent.
- */
-export async function bringToFront(): Promise<void> {
-    try {
-        await browser.maximizeWindow();
-    } catch (e) {
-        console.log(`[window] maximise not supported: ${(e as Error).message.split('\n')[0]}`);
-    }
-    await browser.pause(800);
-}
-
-/**
  * Kept has several top-level windows: the main window, a small floating bubble (~199x34)
  * and hidden helper windows that report an invalid size (e.g. -2147483647). The driver may
  * attach to any of them, so - like app_launcher.py - pick the BIGGEST VISIBLE window whose
@@ -55,7 +42,6 @@ export async function focusMainWindow(): Promise<void> {
     }
     const target = best ?? start;
     if (target) await browser.switchToWindow(target);
-    await bringToFront();
     console.log(
         best
             ? `[window] using main window ${best} (${handles.length} window(s) found)`
@@ -73,7 +59,13 @@ export async function settleWindow(): Promise<void> {
     await gear.waitForExist({ timeout: 60000 });
     if (!appLoaded) {
         await browser.pause(5000);
-        await focusMainWindow();
+        // The 07:07 run passed WITHOUT switching windows; switching broke the gear click.
+        // So only switch when the driver is attached to a tiny/invalid window (the bubble).
+        const r = await browser.getWindowRect().catch(() => ({ width: 0, height: 0 }));
+        console.log(`[window] attached window is ${r.width}x${r.height}`);
+        if (r.width < 400 || r.height < 300 || r.width > 20000 || r.height > 20000) {
+            await focusMainWindow();
+        }
         await browser.waitUntil(async () => (await browser.getPageSource()).includes('Meetings'), {
             timeout: 30000,
             interval: 1500,
@@ -89,7 +81,6 @@ export async function openSettings(): Promise<void> {
     if (await (await $('~SearchBox')).isExisting()) return; // already open
     for (let attempt = 1; attempt <= 2; attempt++) {
         await settleWindow();
-        await bringToFront();
         await (await $('~HeaderSettingsBtn')).click();
         try {
             await (await $('~SearchBox')).waitForExist({ timeout: 15000 });
