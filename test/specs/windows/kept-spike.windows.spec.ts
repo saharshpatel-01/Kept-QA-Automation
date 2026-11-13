@@ -2,6 +2,7 @@
 
 import { step } from '../../../src/utils/steps';
 import {
+    goPage,
     openSettings,
     openSettingsTab,
     settleWindow
@@ -47,6 +48,9 @@ describe('Kept (Windows) - spike', () => {
     });
 
     it('opens Settings with the gear and the Settings menu appears', async () => {
+        // Start from a normal page so the gear is REALLY clicked (Settings may be left open).
+        await goPage('Meetings');
+        expect(await (await $('~SearchBox')).isExisting()).toBe(false);
         await openSettings();
         await browser.saveScreenshot('./screenshots/spike-02-settings.png');
     });

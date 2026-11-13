@@ -10,6 +10,32 @@ import { step } from '../../utils/steps';
 let appLoaded = false;
 
 /**
+ * Press a control the way pywinauto's el.invoke() does: UI Automation Invoke pattern
+ * ("windows: invoke"), which needs no mouse coordinates. Falls back to a normal click.
+ * (The driver's mouse click ignores Windows display scaling, so it can miss the target.)
+ */
+export async function invokeClick(selector: string): Promise<void> {
+    const el = await $(selector);
+    await el.waitForExist({ timeout: 15000 });
+    try {
+        await browser.execute('windows: invoke', el);
+    } catch (e) {
+        console.log(
+            `[click] invoke failed, using mouse click: ${(e as Error).message.split('\n')[0]}`
+        );
+        await el.click();
+    }
+}
+
+/** Click a page in Kept's left sidebar (Meetings, AI Assistant, Tasks, ...) - like nav.go_page(). */
+export async function goPage(name: string): Promise<void> {
+    step(`Click "${name}" in the left sidebar`);
+    await settleWindow();
+    await invokeClick(`//Button[@Name="${name}"]`);
+    await browser.pause(2000);
+}
+
+/**
  * Kept has several top-level windows: the main window, a small floating bubble (~199x34)
  * and hidden helper windows that report an invalid size (e.g. -2147483647). The driver may
  * attach to any of them, so - like app_launcher.py - pick the BIGGEST VISIBLE window whose
@@ -81,7 +107,7 @@ export async function openSettings(): Promise<void> {
     if (await (await $('~SearchBox')).isExisting()) return; // already open
     for (let attempt = 1; attempt <= 2; attempt++) {
         await settleWindow();
-        await (await $('~HeaderSettingsBtn')).click();
+        await invokeClick('~HeaderSettingsBtn');
         try {
             await (await $('~SearchBox')).waitForExist({ timeout: 15000 });
             await (await $('~ListHost')).waitForExist({ timeout: 15000 });
@@ -98,6 +124,6 @@ export async function openSettings(): Promise<void> {
 export async function openSettingsTab(tab: string): Promise<void> {
     await openSettings();
     step(`Click "${tab}" in the Settings left menu`);
-    await (await $(`//Button[@Name="${tab}"]`)).click();
+    await invokeClick(`//Button[@Name="${tab}"]`);
     await browser.pause(2000);
 }
